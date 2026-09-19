@@ -1,3 +1,4 @@
+import socket
 from copy import deepcopy
 from datetime import datetime, timezone
 
@@ -82,6 +83,20 @@ device_state = {
 # =========================================================
 # ROOT
 # =========================================================
+
+@app.on_event("startup")
+def show_listen_addresses():
+    print("SmartElderlyCare API is listening.")
+    print("  Point the ESP SERVER_IP at one of these laptop addresses:")
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ip = info[4][0]
+            if not ip.startswith("127."):
+                print(f"    http://{ip}:8001/sensor")
+    except OSError:
+        pass
+    print("  Dashboard: keep Vite proxying to http://127.0.0.1:8001")
+
 
 @app.get("/")
 def root():
