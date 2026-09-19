@@ -1,8 +1,9 @@
+from copy import deepcopy
 from datetime import datetime, timezone
-from typing import Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 
@@ -100,6 +101,22 @@ def health():
     }
 
 
+def status_payload():
+    """Snapshot of device state. Never return the live dict — it can
+    change while FastAPI is serializing the response."""
+    return deepcopy(device_state)
+
+
+def status_response():
+    return JSONResponse(
+        content=status_payload(),
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Pragma": "no-cache",
+        },
+    )
+
+
 # =========================================================
 # GET CURRENT DEVICE STATUS
 # =========================================================
@@ -107,7 +124,7 @@ def health():
 @app.get("/device/status")
 def get_device_status():
 
-    return device_state
+    return status_response()
 
 
 # =========================================================
@@ -119,7 +136,7 @@ def receive_sensor_data(data: SensorData):
 
     now = datetime.now(timezone.utc).isoformat()
 
-    previous_fall = device_state["fall_detected"]
+    previous_fall = bool(device_state["fall_detected"])
 
     device_state["device_id"] = data.device_id
 
@@ -135,22 +152,22 @@ def receive_sensor_data(data: SensorData):
 
     device_state["total_acceleration"] = data.total_acceleration
 
+    device_state["last_update"] = now
+
+    # Latch the caregiver alert. The ESP only sends fall_detected=true
+    # on the packet right after a fall, then goes back to false. That
+    # later false must NEVER clear the dashboard.
     if data.fall_detected:
         device_state["fall_detected"] = True
 
-    device_state["last_update"] = now
-
-    # Count only the transition:
-    # NORMAL -> FALL
-    if data.fall_detected and not previous_fall:
-
-        device_state["fall_count"] += 1
-        device_state["last_fall"] = now
+        if not previous_fall:
+            device_state["fall_count"] += 1
+            device_state["last_fall"] = now
 
     return {
         "status": "received",
         "timestamp": now,
-        "fall_detected": data.fall_detected
+        "fall_detected": device_state["fall_detected"],
     }
 
 
