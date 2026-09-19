@@ -1,0 +1,475 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family:
+    Inter,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+
+  background: #f4f1f8;
+  color: #27213a;
+}
+
+button {
+  font-family: inherit;
+}
+
+.app {
+  min-height: 100vh;
+  padding-bottom: 40px;
+}
+
+
+/* =====================================================
+   LOADING
+===================================================== */
+
+.loading-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+
+/* =====================================================
+   TOP BAR
+===================================================== */
+
+.topbar {
+  background: #33204f;
+  color: white;
+
+  padding: 24px 6%;
+
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  gap: 20px;
+}
+
+.topbar h1 {
+  margin: 0;
+
+  font-size: 28px;
+}
+
+.topbar p {
+  margin: 5px 0 0;
+
+  opacity: 0.75;
+}
+
+
+.connection {
+  padding: 10px 16px;
+
+  border-radius: 999px;
+
+  font-size: 14px;
+  font-weight: 600;
+
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.connected {
+  background: rgba(93, 220, 139, 0.18);
+}
+
+.disconnected {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.status-dot {
+  width: 9px;
+  height: 9px;
+
+  border-radius: 50%;
+
+  background: #6ee7a0;
+}
+
+
+/* =====================================================
+   EMERGENCY ALERT
+===================================================== */
+
+.emergency-alert {
+  margin: 25px auto;
+
+  width: 88%;
+
+  padding: 22px;
+
+  background: #fff1f1;
+
+  border: 2px solid #ef4444;
+
+  border-radius: 18px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 18px;
+
+  box-shadow:
+    0 8px 30px rgba(239, 68, 68, 0.15);
+}
+
+.alert-icon {
+  font-size: 42px;
+}
+
+.alert-content {
+  flex: 1;
+}
+
+.alert-content h2 {
+  margin: 0 0 5px;
+
+  color: #b91c1c;
+}
+
+.alert-content p {
+  margin: 4px 0;
+
+  color: #5f2020;
+}
+
+.alert-time {
+  font-size: 13px;
+}
+
+
+.clear-button {
+  border: none;
+
+  background: #b91c1c;
+  color: white;
+
+  padding: 12px 18px;
+
+  border-radius: 10px;
+
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+.clear-button:hover {
+  background: #991b1b;
+}
+
+
+/* =====================================================
+   MESSAGE
+===================================================== */
+
+.message {
+  width: 88%;
+
+  margin: 15px auto;
+
+  padding: 12px 16px;
+
+  background: white;
+
+  border-radius: 10px;
+
+  text-align: center;
+
+  box-shadow:
+    0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+
+/* =====================================================
+   DASHBOARD
+===================================================== */
+
+.dashboard {
+  width: 88%;
+
+  max-width: 1200px;
+
+  margin: 30px auto;
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+
+  gap: 20px;
+}
+
+
+/* =====================================================
+   CARDS
+===================================================== */
+
+.card {
+  background: white;
+
+  border-radius: 20px;
+
+  padding: 24px;
+
+  box-shadow:
+    0 5px 20px rgba(46, 36, 63, 0.07);
+}
+
+.person-card {
+  grid-column: span 2;
+}
+
+.card-header {
+  display: flex;
+
+  justify-content: space-between;
+
+  align-items: center;
+
+  gap: 15px;
+}
+
+.card-header h2 {
+  margin: 4px 0 0;
+
+  font-size: 22px;
+}
+
+.eyebrow {
+  margin: 0;
+
+  font-size: 11px;
+
+  font-weight: 800;
+
+  letter-spacing: 1.2px;
+
+  color: #8b7c9e;
+}
+
+
+/* =====================================================
+   STATUS
+===================================================== */
+
+.big-status {
+  padding: 10px 16px;
+
+  border-radius: 999px;
+
+  font-weight: 800;
+
+  font-size: 14px;
+}
+
+.big-status.safe {
+  background: #e8f8ef;
+
+  color: #177245;
+}
+
+.big-status.danger {
+  background: #fee2e2;
+
+  color: #b91c1c;
+}
+
+
+/* =====================================================
+   PERSON INFO
+===================================================== */
+
+.person-info {
+  margin-top: 25px;
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(3, 1fr);
+
+  gap: 15px;
+}
+
+.person-info div {
+  background: #f8f6fa;
+
+  padding: 15px;
+
+  border-radius: 12px;
+}
+
+.person-info span,
+.sensor-value span {
+  display: block;
+
+  font-size: 12px;
+
+  color: #8b7c9e;
+
+  margin-bottom: 6px;
+}
+
+.person-info strong,
+.sensor-value strong {
+  font-size: 18px;
+}
+
+
+/* =====================================================
+   SENSOR
+===================================================== */
+
+.sensor-badge {
+  background: #eee8f7;
+
+  color: #5e3b83;
+
+  padding: 7px 12px;
+
+  border-radius: 999px;
+
+  font-size: 11px;
+
+  font-weight: 800;
+}
+
+.sensor-grid {
+  margin-top: 20px;
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(2, 1fr);
+
+  gap: 12px;
+}
+
+.sensor-value {
+  background: #f8f6fa;
+
+  border-radius: 14px;
+
+  padding: 16px;
+}
+
+.sensor-value.highlight {
+  background: #eee8f7;
+}
+
+
+/* =====================================================
+   TEST
+===================================================== */
+
+.test-card {
+  background: #33204f;
+
+  color: white;
+}
+
+.test-card .eyebrow {
+  color: #cfc0e4;
+}
+
+.test-card h2 {
+  margin: 6px 0 10px;
+}
+
+.test-card p {
+  color: #ddd4e8;
+
+  line-height: 1.5;
+}
+
+.test-button {
+  margin-top: 10px;
+
+  width: 100%;
+
+  padding: 14px;
+
+  border: none;
+
+  border-radius: 12px;
+
+  background: #ef4444;
+
+  color: white;
+
+  font-weight: 800;
+
+  font-size: 15px;
+
+  cursor: pointer;
+}
+
+.test-button:hover {
+  background: #dc2626;
+}
+
+
+/* =====================================================
+   FOOTER
+===================================================== */
+
+footer {
+  text-align: center;
+
+  color: #8b7c9e;
+
+  font-size: 13px;
+}
+
+footer p {
+  margin: 4px;
+}
+
+
+/* =====================================================
+   MOBILE
+===================================================== */
+
+@media (max-width: 800px) {
+
+  .topbar {
+    flex-direction: column;
+
+    align-items: flex-start;
+  }
+
+  .dashboard {
+    grid-template-columns: 1fr;
+  }
+
+  .person-card {
+    grid-column: span 1;
+  }
+
+  .person-info {
+    grid-template-columns: 1fr;
+  }
+
+  .emergency-alert {
+    flex-direction: column;
+
+    align-items: flex-start;
+  }
+
+  .sensor-grid {
+    grid-template-columns: 1fr;
+  }
+}
