@@ -7,10 +7,10 @@ export default defineConfig({
   server: {
     host: true,
     proxy: {
-      '/device': { target: 'http://127.0.0.1:8000', changeOrigin: true },
-      '/test': { target: 'http://127.0.0.1:8000', changeOrigin: true },
-      '/health': { target: 'http://127.0.0.1:8000', changeOrigin: true },
-      '/sensor': { target: 'http://127.0.0.1:8000', changeOrigin: true },
+      '/device': { target: 'http://127.0.0.1:8001', changeOrigin: true },
+      '/test': { target: 'http://127.0.0.1:8001', changeOrigin: true },
+      '/health': { target: 'http://127.0.0.1:8001', changeOrigin: true },
+      '/sensor': { target: 'http://127.0.0.1:8001', changeOrigin: true },
     },
   },
 })
