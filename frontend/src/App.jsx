@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 // In `npm run dev`, Vite proxies /device and /test to the FastAPI server
 // so the browser never has to talk to :8000 (avoids CORS / mixed-host misses).
 const API_URL = import.meta.env.VITE_API_URL ?? (
-  import.meta.env.DEV ? "" : `http://${window.location.hostname}:8000`
+  import.meta.env.DEV ? "" : `http://${window.location.hostname}:8001`
 );
 
 function isFallFlag(value) {
