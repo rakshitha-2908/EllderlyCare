@@ -70,7 +70,15 @@ button {
 }
 
 
-.connection {
+.topbar-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.connection,
+.live-badge {
   padding: 10px 16px;
 
   border-radius: 999px;
@@ -89,6 +97,18 @@ button {
 
 .disconnected {
   background: rgba(255, 255, 255, 0.12);
+}
+
+.live-badge.live {
+  background: rgba(93, 220, 139, 0.18);
+}
+
+.live-badge.polling {
+  background: rgba(250, 204, 21, 0.18);
+}
+
+.live-badge.polling .status-dot {
+  background: #facc15;
 }
 
 .status-dot {
@@ -438,6 +458,60 @@ button {
 
 
 /* =====================================================
+   FALL HISTORY
+===================================================== */
+
+.fall-history-card {
+  grid-column: span 2;
+}
+
+.fall-history-list {
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.fall-history-list li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  background: #fef2f2;
+
+  border-radius: 12px;
+
+  padding: 12px 16px;
+}
+
+.fall-history-icon {
+  font-size: 18px;
+}
+
+.fall-history-device {
+  font-weight: 700;
+  color: #b91c1c;
+  flex: 1;
+}
+
+.fall-history-time {
+  font-size: 13px;
+  color: #8b7c9e;
+}
+
+.fall-history-empty {
+  margin-top: 20px;
+  color: #8b7c9e;
+}
+
+
+/* =====================================================
    FOOTER
 ===================================================== */
 
@@ -470,7 +544,8 @@ footer p {
     grid-template-columns: 1fr;
   }
 
-  .person-card {
+  .person-card,
+  .fall-history-card {
     grid-column: span 1;
   }
 

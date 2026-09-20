@@ -15,9 +15,37 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [alertLatched, setAlertLatched] = useState(false);
+  const [liveConnected, setLiveConnected] = useState(false);
 
   const statusRequestId = useRef(0);
   const seenFallCount = useRef(null);
+  const liveConnectedRef = useRef(false);
+
+  // Shared by both the SSE stream and the REST poll below, so a fall
+  // shown via one path is tracked identically via the other.
+  function applyDeviceUpdate(data) {
+    setDevice(data);
+    setLoading(false);
+
+    const incomingCount =
+      typeof data.fall_count === "number" ? data.fall_count : 0;
+    const isFall = isFallFlag(data.fall_detected);
+
+    if (seenFallCount.current === null) {
+      seenFallCount.current = incomingCount;
+      if (isFall) {
+        setAlertLatched(true);
+      }
+      return;
+    }
+
+    const newFallEvent = incomingCount > seenFallCount.current;
+    seenFallCount.current = Math.max(seenFallCount.current, incomingCount);
+
+    if (isFall || newFallEvent) {
+      setAlertLatched(true);
+    }
+  }
 
   async function fetchStatus() {
     const requestId = ++statusRequestId.current;
@@ -39,27 +67,7 @@ function App() {
         return;
       }
 
-      setDevice(data);
-      setLoading(false);
-
-      const incomingCount =
-        typeof data.fall_count === "number" ? data.fall_count : 0;
-      const isFall = isFallFlag(data.fall_detected);
-
-      if (seenFallCount.current === null) {
-        seenFallCount.current = incomingCount;
-        if (isFall) {
-          setAlertLatched(true);
-        }
-        return;
-      }
-
-      const newFallEvent = incomingCount > seenFallCount.current;
-      seenFallCount.current = Math.max(seenFallCount.current, incomingCount);
-
-      if (isFall || newFallEvent) {
-        setAlertLatched(true);
-      }
+      applyDeviceUpdate(data);
     } catch (error) {
       console.error(error);
       setLoading(false);
@@ -110,9 +118,49 @@ function App() {
     }
   }
 
+  // Real-time channel: Server-Sent Events from GET /events. The backend
+  // pushes a fresh snapshot on every /sensor POST (and test/clear-alert),
+  // so the dashboard updates the instant the ESP8266 sends data.
+  useEffect(() => {
+    const source = new EventSource(`${API_URL}/events`);
+
+    source.onopen = () => {
+      liveConnectedRef.current = true;
+      setLiveConnected(true);
+    };
+
+    source.onmessage = (event) => {
+      liveConnectedRef.current = true;
+      setLiveConnected(true);
+
+      try {
+        applyDeviceUpdate(JSON.parse(event.data));
+      } catch (error) {
+        console.error("Bad SSE payload", error);
+      }
+    };
+
+    source.onerror = () => {
+      // The browser retries EventSource connections automatically;
+      // meanwhile the poll below (fallback) takes over.
+      liveConnectedRef.current = false;
+      setLiveConnected(false);
+    };
+
+    return () => source.close();
+  }, []);
+
+  // REST fallback: keeps polling /device/status every second so the
+  // dashboard still updates if the SSE connection is down or blocked
+  // (e.g. a proxy that buffers/kills long-lived responses). Skipped
+  // while the live channel is healthy to avoid duplicate work.
   useEffect(() => {
     fetchStatus();
-    const interval = setInterval(fetchStatus, 1000);
+    const interval = setInterval(() => {
+      if (!liveConnectedRef.current) {
+        fetchStatus();
+      }
+    }, 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -136,13 +184,24 @@ function App() {
           <p>Caregiver Monitoring Dashboard</p>
         </div>
 
-        <div
-          className={
-            connected ? "connection connected" : "connection disconnected"
-          }
-        >
-          <span className="status-dot"></span>
-          {connected ? "Device Connected" : "Device Offline"}
+        <div className="topbar-status">
+          <div
+            className={
+              liveConnected ? "live-badge live" : "live-badge polling"
+            }
+          >
+            <span className="status-dot"></span>
+            {liveConnected ? "Live" : "Polling"}
+          </div>
+
+          <div
+            className={
+              connected ? "connection connected" : "connection disconnected"
+            }
+          >
+            <span className="status-dot"></span>
+            {connected ? "Device Connected" : "Device Offline"}
+          </div>
         </div>
       </header>
 
@@ -151,7 +210,11 @@ function App() {
           <div className="alert-icon">🚨</div>
 
           <div className="alert-content">
-            <h2>FALL DETECTED</h2>
+            <h2>
+              FALL DETECTED — device {device?.device_id ?? "unknown"}
+              {device?.last_fall &&
+                ` at ${new Date(device.last_fall).toLocaleString()}`}
+            </h2>
             <p>
               A possible fall has been detected.
               The elderly person may need assistance.
@@ -274,6 +337,33 @@ function App() {
           <button className="test-button" onClick={simulateFall}>
             🚨 TEST FALL ALERT
           </button>
+        </section>
+
+        <section className="card fall-history-card">
+          <div className="card-header">
+            <div>
+              <p className="eyebrow">HISTORY</p>
+              <h2>Fall Alert Log</h2>
+            </div>
+          </div>
+
+          {device?.fall_history?.length ? (
+            <ul className="fall-history-list">
+              {device.fall_history.map((entry, index) => (
+                <li key={`${entry.timestamp}-${index}`}>
+                  <span className="fall-history-icon">🚨</span>
+                  <span className="fall-history-device">
+                    {entry.device_id}
+                  </span>
+                  <span className="fall-history-time">
+                    {new Date(entry.timestamp).toLocaleString()}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="fall-history-empty">No falls recorded yet.</p>
+          )}
         </section>
       </main>
 

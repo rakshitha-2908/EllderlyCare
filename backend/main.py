@@ -1,10 +1,13 @@
+import asyncio
+import json
 import socket
 from copy import deepcopy
 from datetime import datetime, timezone
+from typing import Set
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 
@@ -77,7 +80,41 @@ device_state = {
     "last_fall": None,
 
     "fall_count": 0,
+
+    # Most recent falls first, capped below. Exposed over both /device/status
+    # (REST fallback) and /events (SSE) so a page that reconnects after
+    # missing broadcasts can still rebuild its history.
+    "fall_history": [],
 }
+
+FALL_HISTORY_LIMIT = 50
+
+
+# =========================================================
+# LIVE UPDATES (SERVER-SENT EVENTS)
+# =========================================================
+#
+# Each connected dashboard gets its own asyncio.Queue. /sensor (and the
+# other state-mutating endpoints) push the latest snapshot into every
+# queue after updating device_state; /events streams whatever lands in
+# its queue back to that one browser tab.
+
+subscribers: Set["asyncio.Queue[dict]"] = set()
+
+
+async def broadcast_state() -> None:
+    if not subscribers:
+        return
+
+    payload = status_payload()
+
+    for queue in list(subscribers):
+        try:
+            queue.put_nowait(payload)
+        except asyncio.QueueFull:
+            # A stalled client falls behind; drop it rather than block
+            # every other subscriber or leak memory forever.
+            subscribers.discard(queue)
 
 
 # =========================================================
@@ -143,11 +180,63 @@ def get_device_status():
 
 
 # =========================================================
+# SSE STREAM ENDPOINT
+# =========================================================
+
+@app.get("/events")
+async def stream_events(request: Request):
+    """SSE stream for the dashboard. Sends the current snapshot right
+    away, then pushes a fresh one every time /sensor (or a test/clear
+    endpoint) changes device_state. REST polling remains available as
+    a fallback if this connection drops."""
+
+    queue: "asyncio.Queue[dict]" = asyncio.Queue(maxsize=50)
+    subscribers.add(queue)
+
+    async def event_generator():
+        try:
+            yield f"data: {json.dumps(status_payload())}\n\n"
+
+            while True:
+                if await request.is_disconnected():
+                    break
+
+                try:
+                    payload = await asyncio.wait_for(queue.get(), timeout=15)
+                    yield f"data: {json.dumps(payload)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keep-alive\n\n"
+        finally:
+            subscribers.discard(queue)
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+def record_fall(device_id: str, timestamp: str) -> None:
+    device_state["fall_count"] += 1
+    device_state["last_fall"] = timestamp
+
+    device_state["fall_history"].insert(0, {
+        "device_id": device_id,
+        "timestamp": timestamp,
+    })
+    del device_state["fall_history"][FALL_HISTORY_LIMIT:]
+
+
+# =========================================================
 # RECEIVE SENSOR DATA FROM ESP8266
 # =========================================================
 
 @app.post("/sensor")
-def receive_sensor_data(data: SensorData):
+async def receive_sensor_data(data: SensorData):
 
     now = datetime.now(timezone.utc).isoformat()
 
@@ -176,8 +265,9 @@ def receive_sensor_data(data: SensorData):
         device_state["fall_detected"] = True
 
         if not previous_fall:
-            device_state["fall_count"] += 1
-            device_state["last_fall"] = now
+            record_fall(data.device_id, now)
+
+    await broadcast_state()
 
     return {
         "status": "received",
@@ -191,14 +281,15 @@ def receive_sensor_data(data: SensorData):
 # =========================================================
 
 @app.post("/test/fall")
-def simulate_fall():
+async def simulate_fall():
 
     now = datetime.now(timezone.utc).isoformat()
 
     device_state["connected"] = True
     device_state["fall_detected"] = True
-    device_state["last_fall"] = now
-    device_state["fall_count"] += 1
+    record_fall(device_state["device_id"], now)
+
+    await broadcast_state()
 
     return {
         "status": "test fall generated",
@@ -211,9 +302,11 @@ def simulate_fall():
 # =========================================================
 
 @app.post("/device/clear-alert")
-def clear_alert():
+async def clear_alert():
 
     device_state["fall_detected"] = False
+
+    await broadcast_state()
 
     return {
         "status": "alert cleared"
