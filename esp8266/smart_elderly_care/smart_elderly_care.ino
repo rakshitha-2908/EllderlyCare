@@ -5,9 +5,10 @@
   1. iPhone: Settings -> Personal Hotspot -> turn ON "Maximize Compatibility".
      The ESP8266 has no 5 GHz radio, so without this it cannot see the hotspot.
   2. Connect your LAPTOP to the same iPhone hotspot.
-  3. Run the server so it listens on all interfaces:
-        uvicorn main:app --host 0.0.0.0 --port 8000
-  4. Allow port 8000 through Windows Firewall (or disable it for the demo).
+  3. Laptop and ESP must be on the SAME Wi-Fi.
+  4. Run the server so the board can reach it (port 8000 is taken by Colima):
+        uvicorn main:app --host 0.0.0.0 --port 8001 --app-dir backend
+  5. Set SERVER_IPS[] below to this laptop's IPv4 on that Wi-Fi.
 */
 
 #include <ESP8266WiFi.h>
@@ -29,9 +30,17 @@ const unsigned long WIFI_RETRY_INTERVAL  = 5000;   // retry every 5 s in loop()
 // LAPTOP / FASTAPI SERVER
 // =============================
 
-// Laptop's IPv4 address on the iPhone hotspot (from ipconfig).
-const char* SERVER_IP   = "172.20.10.2";
-const int   SERVER_PORT = 8000;
+// Laptop IPv4 addresses the ESP will try (same Wi-Fi as this board).
+// Current campus Wi-Fi GHS-303 laptop IP is 192.168.0.101.
+// iPhone hotspot laptop IP is usually 172.20.10.2.
+const char* SERVER_IPS[] = {
+  "192.168.0.101",
+  "172.20.10.2",
+};
+const int SERVER_IP_COUNT = 2;
+int currentServer = 0;
+
+const int SERVER_PORT = 8001;
 
 const int HTTP_TIMEOUT_MS = 3000;   // don't let a dead server stall the loop
 
@@ -53,8 +62,8 @@ const int HTTP_TIMEOUT_MS = 3000;   // don't let a dead server stall the loop
 // At rest the total reads 1.0 g (gravity), so a single ">2.2 g" test
 // fires on ordinary arm movement.
 
-const float FREEFALL_THRESHOLD = 0.70;   // was 0.50 - easier dip
-const float IMPACT_THRESHOLD   = 2.00;   // was 2.50 - easier spike
+const float FREEFALL_THRESHOLD = 0.80;   // dip below this counts as free-fall
+const float IMPACT_THRESHOLD   = 1.60;   // spike after the dip counts as impact
 
 const unsigned long FREEFALL_WINDOW = 1000;   // impact must follow within 1 s
 const unsigned long FALL_COOLDOWN   = 10000;  // ignore new falls for 10 s
@@ -210,16 +219,9 @@ void reportWiFi()
     Serial.println(" dBm");
 
     Serial.print("  Server     : ");
-    Serial.print(SERVER_IP);
+    Serial.print(SERVER_IPS[currentServer]);
     Serial.print(":");
     Serial.println(SERVER_PORT);
-
-    // Sanity check: both devices must be on the same 172.20.10.x subnet.
-    if (WiFi.localIP()[0] != 172 || WiFi.localIP()[1] != 20)
-    {
-      Serial.println("  WARNING: not on the 172.20.10.x hotspot subnet.");
-      Serial.println("  The server IP will be unreachable. Check the hotspot.");
-    }
   }
   else
   {
@@ -395,7 +397,8 @@ void loop()
   // Send data to FastAPI every second
   // ---------------------------------------------------
 
-  if (millis() - lastSendTime >= SEND_INTERVAL)
+  // Send on the 1 s cadence, or immediately when a fall is latched.
+  if (pendingFall || millis() - lastSendTime >= SEND_INTERVAL)
   {
     lastSendTime = millis();
 
@@ -424,21 +427,6 @@ bool sendSensorData(const SensorData &d, bool fallDetected)
   WiFiClient client;
   HTTPClient http;
 
-  String url = String("http://") + SERVER_IP + ":" +
-               String(SERVER_PORT) + "/sensor";
-
-  Serial.print("Sending data to: ");
-  Serial.println(url);
-
-  if (!http.begin(client, url))
-  {
-    Serial.println("HTTP connection failed.");
-    return false;
-  }
-
-  http.setTimeout(HTTP_TIMEOUT_MS);
-  http.addHeader("Content-Type", "application/json");
-
   String json = "{";
   json += "\"device_id\":\"elderly-device-01\",";
   json += "\"accel_x\":";            json += String(d.accelX, 3); json += ",";
@@ -454,30 +442,54 @@ bool sendSensorData(const SensorData &d, bool fallDetected)
   Serial.println("JSON:");
   Serial.println(json);
 
-  int httpResponseCode = http.POST(json);
-
-  Serial.print("HTTP Response: ");
-  Serial.println(httpResponseCode);
-
-  bool ok = false;
-
-  if (httpResponseCode > 0)
+  for (int attempt = 0; attempt < SERVER_IP_COUNT; attempt++)
   {
-    ok = (httpResponseCode >= 200 && httpResponseCode < 300);
+    int idx = (currentServer + attempt) % SERVER_IP_COUNT;
+    String url = String("http://") + SERVER_IPS[idx] + ":" +
+                 String(SERVER_PORT) + "/sensor";
 
-    String response = http.getString();
-    Serial.println("Server response:");
-    Serial.println(response);
-  }
-  else
-  {
-    Serial.print("HTTP error: ");
-    Serial.println(http.errorToString(httpResponseCode));
-    Serial.println("  -> Is uvicorn running with --host 0.0.0.0 ?");
-    Serial.println("  -> Is the laptop on the same iPhone hotspot ?");
-    Serial.println("  -> Is Windows Firewall blocking port 8000 ?");
+    Serial.print("Sending data to: ");
+    Serial.println(url);
+
+    if (!http.begin(client, url))
+    {
+      Serial.println("HTTP connection failed.");
+      http.end();
+      continue;
+    }
+
+    http.setTimeout(HTTP_TIMEOUT_MS);
+    http.addHeader("Content-Type", "application/json");
+
+    int httpResponseCode = http.POST(json);
+
+    Serial.print("HTTP Response: ");
+    Serial.println(httpResponseCode);
+
+    if (httpResponseCode >= 200 && httpResponseCode < 300)
+    {
+      currentServer = idx;
+      String response = http.getString();
+      Serial.println("Server response:");
+      Serial.println(response);
+      http.end();
+      return true;
+    }
+
+    if (httpResponseCode > 0)
+    {
+      Serial.println(http.getString());
+    }
+    else
+    {
+      Serial.print("HTTP error: ");
+      Serial.println(http.errorToString(httpResponseCode));
+      Serial.println("  -> uvicorn --host 0.0.0.0 --port 8001 --app-dir backend");
+      Serial.println("  -> Laptop and ESP must be on the same Wi-Fi");
+    }
+
+    http.end();
   }
 
-  http.end();
-  return ok;
+  return false;
 }
